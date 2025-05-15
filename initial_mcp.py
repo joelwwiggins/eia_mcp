@@ -67,5 +67,5 @@ async def get_facet_values(request: FacetRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    import uvicorn
+    import uvi  corn
     uvicorn.run(app, host="0.0.0.0", port=8000)
