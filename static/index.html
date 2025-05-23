@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EIA Energy Data Query Interface</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🛢️ EIA Energy Data Explorer</h1>
+            <p>Query U.S. Energy Information Administration data with ease</p>
+        </div>
+        
+        <div class="main-content">
+            <div class="quick-examples">
+                <h3>🚀 Quick Examples</h3>
+                <button class="example-btn" onclick="loadExample('gasoline')">Gasoline Prices 2023</button>
+                <button class="example-btn" onclick="loadExample('crude')">Crude Oil Data</button>
+                <button class="example-btn" onclick="loadExample('metadata')">Dataset Metadata</button>
+                <button class="example-btn" onclick="loadExample('facets')">Available Facets</button>
+            </div>
+            
+            <div class="query-section">
+                <div class="query-tabs">
+                    <button class="tab active" onclick="switchTab('data')">📊 Data Query</button>
+                    <button class="tab" onclick="switchTab('metadata')">📋 Metadata</button>
+                    <button class="tab" onclick="switchTab('facets')">🏷️ Facets</button>
+                </div>
+                
+                <div id="data-tab" class="tab-content active">
+                    <h3>Fetch Time Series Data</h3>
+                    <div class="form-group">
+                        <label for="data-route">Route (e.g., petroleum/pri/gnd):</label>
+                        <input type="text" id="data-route" value="petroleum/pri/gnd" placeholder="petroleum/pri/gnd">
+                    </div>
+                    <div class="form-group">
+                        <label for="start-date">Start Date (YYYY-MM):</label>
+                        <input type="text" id="start-date" value="2023-01" placeholder="2023-01">
+                    </div>
+                    <div class="form-group">
+                        <label for="end-date">End Date (YYYY-MM):</label>
+                        <input type="text" id="end-date" value="2023-12" placeholder="2023-12">
+                    </div>
+                    <div class="form-group">
+                        <label for="frequency">Frequency:</label>
+                        <select id="frequency">
+                            <option value="monthly">Monthly</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="daily">Daily</option>
+                            <option value="annual">Annual</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="facets-json">Facets (JSON format, optional):</label>
+                        <textarea id="facets-json" rows="3" placeholder='{"product": ["gasoline"], "area": ["US"]}'></textarea>
+                    </div>
+                    <button class="btn" onclick="queryData()">🔍 Query Data</button>
+                </div>
+                
+                <div id="metadata-tab" class="tab-content">
+                    <h3>Get Dataset Metadata</h3>
+                    <div class="form-group">
+                        <label for="metadata-route">Route:</label>
+                        <input type="text" id="metadata-route" value="petroleum/pri/gnd" placeholder="petroleum/pri/gnd">
+                    </div>
+                    <button class="btn" onclick="queryMetadata()">📋 Get Metadata</button>
+                </div>
+                
+                <div id="facets-tab" class="tab-content">
+                    <h3>Get Available Facet Values</h3>
+                    <div class="form-group">
+                        <label for="facets-route">Route:</label>
+                        <input type="text" id="facets-route" value="petroleum/pri/gnd" placeholder="petroleum/pri/gnd">
+                    </div>
+                    <div class="form-group">
+                        <label for="facet-name">Facet Name:</label>
+                        <input type="text" id="facet-name" value="product" placeholder="product">
+                    </div>
+                    <button class="btn" onclick="queryFacets()">🏷️ Get Facet Values</button>
+                </div>
+            </div>
+            
+            <div class="results-section">
+                <h3>📈 Results</h3>
+                <div id="results" class="results-container">
+                    <div class="loading">Enter a query above to see results here...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://127.0.0.1:8000';
+        
+        function switchTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Show selected tab
+            document.getElementById(tabName + '-tab').classList.add('active');
+            event.target.classList.add('active');
+        }
+        
+        function showLoading() {
+            document.getElementById('results').innerHTML = '<div class="loading">⏳ Loading...</div>';
+        }
+        
+        function showError(message) {
+            document.getElementById('results').innerHTML = `<div class="error">❌ Error: ${message}</div>`;
+        }
+        
+        function showSuccess(data) {
+            const jsonString = JSON.stringify(data, null, 2);
+            document.getElementById('results').innerHTML = `
+                <div class="success">✅ Query successful!</div>
+                <div class="json-display">${jsonString}</div>
+            `;
+        }
+        
+        async function makeRequest(endpoint, data) {
+            try {
+                showLoading();
+                const response = await fetch(`${API_BASE}${endpoint}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                showSuccess(result);
+            } catch (error) {
+                showError(error.message);
+            }
+        }
+        
+        function queryData() {
+            const route = document.getElementById('data-route').value;
+            const start = document.getElementById('start-date').value;
+            const end = document.getElementById('end-date').value;
+            const frequency = document.getElementById('frequency').value;
+            const facetsText = document.getElementById('facets-json').value.trim();
+            
+            const data = {
+                route: route,
+                start: start,
+                end: end,
+                frequency: frequency
+            };
+            
+            if (facetsText) {
+                try {
+                    data.facets = JSON.parse(facetsText);
+                } catch (e) {
+                    showError('Invalid JSON in facets field');
+                    return;
+                }
+            }
+            
+            makeRequest('/data', data);
+        }
+        
+        function queryMetadata() {
+            const route = document.getElementById('metadata-route').value;
+            makeRequest('/metadata', { route: route });
+        }
+        
+        function queryFacets() {
+            const route = document.getElementById('facets-route').value;
+            const facet = document.getElementById('facet-name').value;
+            makeRequest('/facets', { route: route, facet: facet });
+        }
+        
+        function loadExample(type) {
+            switch(type) {
+                case 'gasoline':
+                    switchTab('data');
+                    document.getElementById('data-route').value = 'petroleum/pri/gnd';
+                    document.getElementById('start-date').value = '2023-01';
+                    document.getElementById('end-date').value = '2023-12';
+                    document.getElementById('frequency').value = 'monthly';
+                    document.getElementById('facets-json').value = '{"product": ["gasoline"]}';
+                    break;
+                case 'crude':
+                    switchTab('data');
+                    document.getElementById('data-route').value = 'petroleum/crd';
+                    document.getElementById('start-date').value = '2023-01';
+                    document.getElementById('end-date').value = '2023-12';
+                    document.getElementById('frequency').value = 'monthly';
+                    document.getElementById('facets-json').value = '';
+                    break;
+                case 'metadata':
+                    switchTab('metadata');
+                    document.getElementById('metadata-route').value = 'petroleum/pri/gnd';
+                    break;
+                case 'facets':
+                    switchTab('facets');
+                    document.getElementById('facets-route').value = 'petroleum/pri/gnd';
+                    document.getElementById('facet-name').value = 'product';
+                    break;
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,14 +1,12 @@
 import os
 import requests
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Optional
 import dotenv
-from openai import OpenAI, OpenAIModel
-from openai.functional import spec_from_openapi_url, to_function_defs
-from langchain.llms import OpenAI
-from langchain.tools import Tool
-from langchain.agents import initialize_agent
 
 dotenv.load_dotenv()
 
@@ -17,9 +15,17 @@ EIA_BASE_URL = "https://api.eia.gov/v2"
 
 app = FastAPI(title="EIA APIv2 MCP Server")
 
-client = OpenAI()
-spec   = spec_from_openapi_url("http://localhost:8000/openapi.json")
-funcs  = to_function_defs(spec)
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Mount static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 class MetadataRequest(BaseModel):
     route: str  # e.g., "petroleum/pri/gnd"
@@ -52,6 +58,11 @@ def fetch_eia_facet_values(route: str, facet: str) -> dict:
     resp = requests.get(url, params=params)
     resp.raise_for_status()
     return resp.json()
+
+@app.get("/")
+async def serve_index():
+    """Serve the main HTML interface."""
+    return FileResponse("static/index.html")
 
 @app.get("/health")
 async def health_check():
@@ -112,20 +123,3 @@ async def get_data(req: DataRequest):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000)
-
-resp = client.chat.completions.create(
-  model="gpt-4o",
-  messages=[{"role":"user","content":"List all facets for petroleum/pri/gnd"}],
-  functions=funcs,
-  function_call={"name":"get_facet_values"},
-)
-
-# langchain agent setup
-eia_tool = Tool.from_openapi(
-  "EIA MCP API", 
-  url="http://localhost:8000/openapi.json",
-  description="EIA API v2 MCP server"
-)
-
-llm   = OpenAI(model_name="gpt-4o")
-agent = initialize_agent([eia_tool], llm, agent="zero-shot-react-description", verbose=True)
